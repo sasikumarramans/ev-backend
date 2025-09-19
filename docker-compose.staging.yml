@@ -44,7 +44,7 @@ services:
     container_name: ev-booking-staging-app
     environment:
       SPRING_PROFILES_ACTIVE: staging
-      DB_HOST: postgres
+      DB_HOST: ev-booking-staging-postgres
       DB_PORT: 5432
       DB_NAME: ev_booking_staging_db
       DB_USERNAME: ev_staging_user
