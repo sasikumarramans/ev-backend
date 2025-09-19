@@ -21,13 +21,13 @@ fi
 export $(cat .env.staging | grep -v '^#' | xargs)
 
 echo -e "${YELLOW}Building staging images...${NC}"
-docker-compose -f docker-compose.staging.yml build --no-cache
+docker compose -f docker-compose.staging.yml build --no-cache
 
 echo -e "${YELLOW}Stopping existing staging containers...${NC}"
-docker-compose -f docker-compose.staging.yml down
+docker compose -f docker-compose.staging.yml down
 
 echo -e "${YELLOW}Starting staging services...${NC}"
-docker-compose -f docker-compose.staging.yml up -d
+docker compose -f docker-compose.staging.yml up -d
 
 echo -e "${YELLOW}Waiting for services to be ready...${NC}"
 sleep 30
@@ -52,7 +52,7 @@ done
 if [ $ATTEMPT -gt $MAX_ATTEMPTS ]; then
     echo -e "${RED}Health check failed after $MAX_ATTEMPTS attempts${NC}"
     echo "Checking logs..."
-    docker-compose -f docker-compose.staging.yml logs app
+    docker compose -f docker-compose.staging.yml logs app
     exit 1
 fi
 
@@ -63,4 +63,4 @@ echo -e "${YELLOW}API Documentation: http://localhost:8081/api/swagger-ui.html${
 
 # Display running services
 echo -e "${YELLOW}Running services:${NC}"
-docker-compose -f docker-compose.staging.yml ps
+docker compose -f docker-compose.staging.yml ps
