@@ -11,7 +11,7 @@ spring:
     active: dev
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/ev_booking_db
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:ev_booking_db}
     username: ${DB_USERNAME:ev_user}
     password: ${DB_PASSWORD:ev_password}
     driver-class-name: org.postgresql.Driver
