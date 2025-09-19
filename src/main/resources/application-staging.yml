@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:postgresql://${DB_HOST:staging-postgres}:${DB_PORT:5432}/${DB_NAME:ev_booking_staging_db}
+    url: jdbc:postgresql://${DB_HOST:postgres}:${DB_PORT:5432}/${DB_NAME:ev_booking_staging_db}
     username: ${DB_USERNAME:ev_staging_user}
     password: ${DB_PASSWORD:staging_password}
     hikari:
@@ -32,7 +32,7 @@ spring:
   cache:
     type: redis
     redis:
-      host: ${REDIS_HOST:staging-redis}
+      host: ${REDIS_HOST:redis}
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
       timeout: 2000ms
