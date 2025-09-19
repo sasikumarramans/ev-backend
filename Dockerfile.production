@@ -1,0 +1,67 @@
+FROM openjdk:17-jdk-slim as builder
+
+WORKDIR /app
+
+# Copy gradle wrapper and build files
+COPY gradlew .
+COPY gradle gradle
+COPY build.gradle .
+COPY settings.gradle .
+
+RUN chmod +x gradlew
+
+# Copy source code
+COPY src src
+
+# Build the application with tests
+RUN ./gradlew build --no-daemon
+
+# Runtime stage
+FROM openjdk:17-jre-slim
+
+WORKDIR /app
+
+# Install security updates and required tools
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get install -y curl dumb-init && \
+    rm -rf /var/lib/apt/lists/*
+
+# Create non-root user with specific UID/GID
+RUN groupadd -r evbooking -g 1001 && \
+    useradd -r -u 1001 -g evbooking evbooking
+
+# Copy built jar
+COPY --from=builder /app/build/libs/*.jar app.jar
+
+# Create directories with proper permissions
+RUN mkdir -p /app/logs /app/uploads /app/ssl && \
+    chown -R evbooking:evbooking /app && \
+    chmod 755 /app && \
+    chmod 750 /app/logs /app/uploads /app/ssl
+
+USER evbooking
+
+EXPOSE 8080
+
+# JVM optimization for production
+ENV JAVA_OPTS="-Xms2g -Xmx4g \
+    -XX:+UseG1GC \
+    -XX:MaxGCPauseMillis=100 \
+    -XX:+UseStringDeduplication \
+    -XX:+OptimizeStringConcat \
+    -XX:+UseCompressedOops \
+    -XX:+UseCompressedClassPointers \
+    -Djava.security.egd=file:/dev/./urandom \
+    -Dspring.profiles.active=prod"
+
+# Security and monitoring
+ENV SPRING_SECURITY_REQUIRE_SSL=true
+ENV MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=health,info,metrics,prometheus
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD curl -f http://localhost:8080/api/actuator/health || exit 1
+
+# Use dumb-init for proper signal handling
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

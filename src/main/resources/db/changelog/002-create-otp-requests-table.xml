@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <changeSet id="002-create-otp-requests-table" author="ev-booking-backend">
+        <createTable tableName="otp_requests">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="mobile_number" type="VARCHAR(15)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="otp_code" type="VARCHAR(10)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="type" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="attempt_count" type="INT" defaultValue="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="expires_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="verified_at" type="TIMESTAMP"/>
+        </createTable>
+
+        <!-- Create indexes for performance -->
+        <createIndex tableName="otp_requests" indexName="idx_otp_mobile_number">
+            <column name="mobile_number"/>
+        </createIndex>
+
+        <createIndex tableName="otp_requests" indexName="idx_otp_mobile_status">
+            <column name="mobile_number"/>
+            <column name="status"/>
+        </createIndex>
+
+        <createIndex tableName="otp_requests" indexName="idx_otp_expires_at">
+            <column name="expires_at"/>
+        </createIndex>
+
+        <createIndex tableName="otp_requests" indexName="idx_otp_created_at">
+            <column name="created_at"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

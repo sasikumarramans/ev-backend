@@ -1,0 +1,176 @@
+name: Emergency Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to rollback'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      rollback_confirmation:
+        description: 'Type "ROLLBACK-CONFIRMED" to proceed'
+        required: true
+        default: ''
+      backup_timestamp:
+        description: 'Backup timestamp (YYYYMMDD-HHMMSS) - leave empty for latest'
+        required: false
+        default: ''
+
+jobs:
+  rollback:
+    name: Emergency Rollback
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+
+    steps:
+    - name: Verify rollback confirmation
+      run: |
+        if [ "${{ github.event.inputs.rollback_confirmation }}" != "ROLLBACK-CONFIRMED" ]; then
+          echo "Rollback confirmation failed. Please type 'ROLLBACK-CONFIRMED' to proceed."
+          exit 1
+        fi
+
+    - name: Setup SSH
+      uses: webfactory/ssh-agent@v0.8.0
+      with:
+        ssh-private-key: ${{ github.event.inputs.environment == 'production' && secrets.PRODUCTION_SSH_PRIVATE_KEY || secrets.STAGING_SSH_PRIVATE_KEY }}
+
+    - name: Add server to known hosts
+      run: |
+        mkdir -p ~/.ssh
+        HOST=${{ github.event.inputs.environment == 'production' && secrets.PRODUCTION_HOST || secrets.STAGING_HOST }}
+        ssh-keyscan -H $HOST >> ~/.ssh/known_hosts
+
+    - name: Perform rollback
+      run: |
+        HOST=${{ github.event.inputs.environment == 'production' && secrets.PRODUCTION_HOST || secrets.STAGING_HOST }}
+        USER=${{ github.event.inputs.environment == 'production' && secrets.PRODUCTION_USER || secrets.STAGING_USER }}
+        ENV_DIR=${{ github.event.inputs.environment == 'production' && 'ev-booking-production' || 'ev-booking-staging' }}
+        COMPOSE_FILE=${{ github.event.inputs.environment == 'production' && 'docker-compose.production.yml' || 'docker-compose.staging.yml' }}
+
+        ssh $USER@$HOST "
+          cd ~/$ENV_DIR
+
+          echo 'EMERGENCY ROLLBACK INITIATED for ${{ github.event.inputs.environment }}'
+          echo 'Initiated by: ${{ github.actor }}'
+          echo 'Timestamp: $(date)'
+
+          # Stop current services
+          echo 'Stopping current services...'
+          docker-compose -f $COMPOSE_FILE down
+
+          # Determine backup to use
+          BACKUP_TO_USE='${{ github.event.inputs.backup_timestamp }}'
+          if [ -z \"\$BACKUP_TO_USE\" ]; then
+            BACKUP_TO_USE=\$(ls -t backups/ | head -1)
+            echo 'Using latest backup: '\$BACKUP_TO_USE
+          else
+            BACKUP_TO_USE=\"backup-\$BACKUP_TO_USE\"
+            echo 'Using specified backup: '\$BACKUP_TO_USE
+          fi
+
+          if [ ! -d \"backups/\$BACKUP_TO_USE\" ]; then
+            echo 'ERROR: Backup directory not found: backups/'\$BACKUP_TO_USE
+            exit 1
+          fi
+
+          # Restore database
+          if [ -f \"backups/\$BACKUP_TO_USE/database_backup.sql\" ]; then
+            echo 'Restoring database...'
+            docker-compose -f $COMPOSE_FILE up -d postgres
+            sleep 30
+
+            if [ '${{ github.event.inputs.environment }}' = 'production' ]; then
+              docker-compose -f $COMPOSE_FILE exec -T postgres psql -U \${POSTGRES_USER:-ev_prod_user} -d \${POSTGRES_DB:-ev_booking_prod_db} < \"backups/\$BACKUP_TO_USE/database_backup.sql\"
+            else
+              docker-compose -f $COMPOSE_FILE exec -T postgres psql -U ev_staging_user -d ev_booking_staging_db < \"backups/\$BACKUP_TO_USE/database_backup.sql\"
+            fi
+            echo 'Database restored successfully'
+          fi
+
+          # Restore uploads
+          if [ -f \"backups/\$BACKUP_TO_USE/uploads_backup.tar.gz\" ]; then
+            echo 'Restoring uploaded files...'
+            tar -xzf \"backups/\$BACKUP_TO_USE/uploads_backup.tar.gz\"
+            echo 'Uploads restored successfully'
+          fi
+
+          # Start services with previous image
+          echo 'Starting services with rollback configuration...'
+          docker-compose -f $COMPOSE_FILE up -d
+
+          echo 'ROLLBACK COMPLETED'
+          echo 'Services status:'
+          docker-compose -f $COMPOSE_FILE ps
+        "
+
+    - name: Verify rollback
+      run: |
+        HOST=${{ github.event.inputs.environment == 'production' && secrets.PRODUCTION_HOST || secrets.STAGING_HOST }}
+        USER=${{ github.event.inputs.environment == 'production' && secrets.PRODUCTION_USER || secrets.STAGING_USER }}
+        HEALTH_URL=${{ github.event.inputs.environment == 'production' && 'https://localhost:8082/api/actuator/health' || 'http://localhost:8081/api/actuator/health' }}
+
+        ssh $USER@$HOST "
+          echo 'Waiting for services to be ready after rollback...'
+          sleep 60
+
+          echo 'Verifying rollback health...'
+          for i in {1..10}; do
+            if curl -k -f $HEALTH_URL; then
+              echo 'Rollback health check passed!'
+              exit 0
+            else
+              echo 'Health check failed, attempt \$i/10'
+              sleep 10
+            fi
+          done
+
+          echo 'Rollback verification failed!'
+          exit 1
+        "
+
+    - name: Send rollback notification
+      if: always()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        channel: '#production-alerts'
+        webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+        fields: |
+          {
+            "attachments": [
+              {
+                "color": "${{ job.status == 'success' && 'warning' || 'danger' }}",
+                "fields": [
+                  {
+                    "title": "${{ job.status == 'success' && '⚠️ EMERGENCY ROLLBACK COMPLETED' || '🚨 EMERGENCY ROLLBACK FAILED' }}",
+                    "value": "${{ job.status == 'success' && 'Emergency rollback has been completed successfully' || 'Emergency rollback has failed - immediate attention required' }}",
+                    "short": false
+                  },
+                  {
+                    "title": "Environment",
+                    "value": "${{ github.event.inputs.environment }}",
+                    "short": true
+                  },
+                  {
+                    "title": "Initiated By",
+                    "value": "${{ github.actor }}",
+                    "short": true
+                  },
+                  {
+                    "title": "Backup Used",
+                    "value": "${{ github.event.inputs.backup_timestamp || 'Latest Available' }}",
+                    "short": true
+                  },
+                  {
+                    "title": "Status",
+                    "value": "${{ job.status }}",
+                    "short": true
+                  }
+                ]
+              }
+            ]
+          }

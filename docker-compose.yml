@@ -1,0 +1,52 @@
+version: '3.8'
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: ev-booking-postgres
+    environment:
+      POSTGRES_DB: ev_booking_db
+      POSTGRES_USER: ev_user
+      POSTGRES_PASSWORD: ev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - ev-booking-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: ev-booking-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - ev-booking-network
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ev-booking-app
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: ev_user
+      DB_PASSWORD: ev_password
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - ev-booking-network
+
+volumes:
+  postgres_data:
+
+networks:
+  ev-booking-network:
+    driver: bridge

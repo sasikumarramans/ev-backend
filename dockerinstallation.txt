@@ -1,0 +1,60 @@
+# Docker Installation Commands for AlmaLinux 10.0
+# These commands were tested and working on AlmaLinux 10.0 (Purple Lion)
+
+# Step 1: Check system information
+uname -r
+cat /etc/os-release
+
+# Step 2: Install required packages and repository
+dnf install -y yum-utils device-mapper-persistent-data lvm2
+
+# Step 3: Add Docker CE repository
+yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+
+# Step 4: Install Docker CE and related packages
+dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+# Step 5: Install kernel modules (THIS WAS THE KEY STEP)
+# Install kernel modules for your specific kernel version
+dnf install -y kernel-modules-$(uname -r) kernel-modules-extra-$(uname -r)
+
+# Step 6: Load required kernel modules
+modprobe xt_addrtype
+modprobe br_netfilter
+modprobe ip_tables
+modprobe iptable_nat
+modprobe nf_nat
+modprobe nf_conntrack
+
+# Step 7: Verify modules are loaded
+lsmod | grep xt_addrtype
+lsmod | grep br_netfilter
+lsmod | grep ip_tables
+
+# Step 8: Remove any problematic Docker configuration
+rm -f /etc/docker/daemon.json
+
+# Step 9: Start and enable Docker
+systemctl start docker
+systemctl enable docker
+
+# Step 10: Verify Docker is running
+systemctl status docker
+
+# Step 11: Test Docker installation
+docker run hello-world
+docker --version
+docker compose version
+
+# Optional: Make modules load automatically on boot
+echo 'xt_addrtype' >> /etc/modules-load.d/docker.conf
+echo 'br_netfilter' >> /etc/modules-load.d/docker.conf
+echo 'ip_tables' >> /etc/modules-load.d/docker.conf
+echo 'iptable_nat' >> /etc/modules-load.d/docker.conf
+
+# Troubleshooting commands (if needed)
+# Check Docker service status
+journalctl -xeu docker.service --no-pager
+
+# Check available kernel modules
+find /lib/modules/$(uname -r) -name "*.ko" | grep -E "(xt_addrtype|br_netfilter|ip_tables)"

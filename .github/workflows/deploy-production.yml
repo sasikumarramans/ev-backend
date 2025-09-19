@@ -1,0 +1,353 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      deploy_confirmation:
+        description: 'Type "deploy-to-production" to confirm'
+        required: true
+        default: ''
+
+env:
+  DOCKER_IMAGE: ${{ secrets.DOCKER_USERNAME }}/ev-booking-backend
+
+jobs:
+  pre-deployment-checks:
+    name: Pre-deployment Validation
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Verify deployment confirmation
+      if: github.event_name == 'workflow_dispatch'
+      run: |
+        if [ "${{ github.event.inputs.deploy_confirmation }}" != "deploy-to-production" ]; then
+          echo "Deployment confirmation failed. Please type 'deploy-to-production' to confirm."
+          exit 1
+        fi
+
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Validate environment secrets
+      run: |
+        echo "Checking required secrets..."
+        secrets_missing=false
+
+        required_secrets=(
+          "PRODUCTION_SSH_PRIVATE_KEY"
+          "PRODUCTION_HOST"
+          "PRODUCTION_USER"
+          "PRODUCTION_POSTGRES_PASSWORD"
+          "PRODUCTION_JWT_SECRET_KEY"
+          "PRODUCTION_STRIPE_SECRET_KEY"
+          "PRODUCTION_SSL_KEYSTORE_PASSWORD"
+        )
+
+        for secret in "${required_secrets[@]}"; do
+          if [ -z "${!secret}" ]; then
+            echo "Missing required secret: $secret"
+            secrets_missing=true
+          fi
+        done
+
+        if [ "$secrets_missing" = true ]; then
+          echo "Required secrets are missing. Deployment aborted."
+          exit 1
+        fi
+
+        echo "All required secrets are present."
+
+  deploy-production:
+    name: Deploy to Production Environment
+    runs-on: ubuntu-latest
+    needs: pre-deployment-checks
+    environment: production
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup SSH
+      uses: webfactory/ssh-agent@v0.8.0
+      with:
+        ssh-private-key: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
+
+    - name: Add production server to known hosts
+      run: |
+        mkdir -p ~/.ssh
+        ssh-keyscan -H ${{ secrets.PRODUCTION_HOST }} >> ~/.ssh/known_hosts
+
+    - name: Create deployment directory on production server
+      run: |
+        ssh ${{ secrets.PRODUCTION_USER }}@${{ secrets.PRODUCTION_HOST }} '
+          mkdir -p ~/ev-booking-production/backups
+        '
+
+    - name: Copy deployment files to production server
+      run: |
+        scp -r docker-compose.production.yml \
+               Dockerfile.production \
+               nginx/production.conf \
+               monitoring/prometheus.yml \
+               scripts/deployment/deploy-production.sh \
+               scripts/backup/ \
+               .env.production.example \
+               ${{ secrets.PRODUCTION_USER }}@${{ secrets.PRODUCTION_HOST }}:~/ev-booking-production/
+
+    - name: Create environment file on production server
+      run: |
+        ssh ${{ secrets.PRODUCTION_USER }}@${{ secrets.PRODUCTION_HOST }} '
+          cd ~/ev-booking-production
+          cat > .env.production << EOF
+          POSTGRES_DB=${{ secrets.PRODUCTION_POSTGRES_DB }}
+          POSTGRES_USER=${{ secrets.PRODUCTION_POSTGRES_USER }}
+          POSTGRES_PASSWORD=${{ secrets.PRODUCTION_POSTGRES_PASSWORD }}
+          REDIS_PASSWORD=${{ secrets.PRODUCTION_REDIS_PASSWORD }}
+          JWT_SECRET_KEY=${{ secrets.PRODUCTION_JWT_SECRET_KEY }}
+          JWT_EXPIRATION=${{ secrets.PRODUCTION_JWT_EXPIRATION }}
+          MAIL_USERNAME=${{ secrets.PRODUCTION_MAIL_USERNAME }}
+          MAIL_PASSWORD=${{ secrets.PRODUCTION_MAIL_PASSWORD }}
+          STRIPE_PUBLIC_KEY=${{ secrets.PRODUCTION_STRIPE_PUBLIC_KEY }}
+          STRIPE_SECRET_KEY=${{ secrets.PRODUCTION_STRIPE_SECRET_KEY }}
+          SSL_ENABLED=true
+          SSL_KEYSTORE_PATH=/app/ssl/keystore.p12
+          SSL_KEYSTORE_PASSWORD=${{ secrets.PRODUCTION_SSL_KEYSTORE_PASSWORD }}
+          CORS_ALLOWED_ORIGINS=${{ secrets.PRODUCTION_CORS_ALLOWED_ORIGINS }}
+          WEBHOOK_URL=${{ secrets.PRODUCTION_WEBHOOK_URL }}
+          GRAFANA_PASSWORD=${{ secrets.PRODUCTION_GRAFANA_PASSWORD }}
+          DOCKER_IMAGE_TAG=prod-${{ github.sha }}
+          EOF
+        '
+
+    - name: Update Docker image tag in compose file
+      run: |
+        ssh ${{ secrets.PRODUCTION_USER }}@${{ secrets.PRODUCTION_HOST }} '
+          cd ~/ev-booking-production
+          sed -i "s|build:|image: ${{ env.DOCKER_IMAGE }}:prod-${{ github.sha }}|g" docker-compose.production.yml
+          sed -i "/dockerfile:/d" docker-compose.production.yml
+          sed -i "/context:/d" docker-compose.production.yml
+        '
+
+    - name: Backup current production
+      run: |
+        ssh ${{ secrets.PRODUCTION_USER }}@${{ secrets.PRODUCTION_HOST }} '
+          cd ~/ev-booking-production
+
+          # Create backup directory with timestamp
+          BACKUP_DIR="backups/backup-$(date +%Y%m%d-%H%M%S)"
+          mkdir -p $BACKUP_DIR
+
+          # Backup database
+          if docker-compose -f docker-compose.production.yml ps postgres | grep -q "Up"; then
+            echo "Creating database backup..."
+            docker-compose -f docker-compose.production.yml exec -T postgres pg_dump -U ${POSTGRES_USER:-ev_prod_user} ${POSTGRES_DB:-ev_booking_prod_db} > $BACKUP_DIR/database_backup.sql
+          fi
+
+          # Backup uploaded files
+          if [ -d "uploads" ]; then
+            echo "Creating uploads backup..."
+            tar -czf $BACKUP_DIR/uploads_backup.tar.gz uploads/
+          fi
+
+          echo "Backup completed in $BACKUP_DIR"
+        '
+
+    - name: Deploy to production with blue-green strategy
+      run: |
+        ssh ${{ secrets.PRODUCTION_USER }}@${{ secrets.PRODUCTION_HOST }} '
+          cd ~/ev-booking-production
+          chmod +x deploy-production.sh
+          ./deploy-production.sh
+        '
+
+    - name: Comprehensive health checks
+      run: |
+        ssh ${{ secrets.PRODUCTION_USER }}@${{ secrets.PRODUCTION_HOST }} '
+          echo "Starting comprehensive health checks..."
+
+          # Wait for application startup
+          echo "Waiting for application to start..."
+          sleep 60
+
+          # Health check with extended retry
+          echo "Performing health checks..."
+          for i in {1..20}; do
+            if curl -k -f https://localhost:8082/api/actuator/health; then
+              echo "Health check passed!"
+              break
+            else
+              echo "Health check failed, attempt $i/20"
+              sleep 15
+            fi
+          done
+
+          # Final health verification
+          if ! curl -k -f https://localhost:8082/api/actuator/health; then
+            echo "Final health check failed!"
+            exit 1
+          fi
+
+          # Database connectivity check
+          echo "Checking database connectivity..."
+          docker-compose -f docker-compose.production.yml exec -T postgres pg_isready -U ${POSTGRES_USER:-ev_prod_user} -d ${POSTGRES_DB:-ev_booking_prod_db}
+
+          # Redis connectivity check
+          echo "Checking Redis connectivity..."
+          docker-compose -f docker-compose.production.yml exec -T redis redis-cli -a $REDIS_PASSWORD ping
+
+          # SSL certificate check
+          echo "Checking SSL certificate..."
+          echo | openssl s_client -connect localhost:8082 -servername localhost 2>/dev/null | openssl x509 -noout -dates
+
+          echo "All health checks passed!"
+        '
+
+    - name: Performance validation
+      run: |
+        ssh ${{ secrets.PRODUCTION_USER }}@${{ secrets.PRODUCTION_HOST }} '
+          echo "Running performance validation..."
+
+          # Check memory usage
+          docker stats --no-stream --format "table {{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}"
+
+          # Check disk space
+          df -h
+
+          # Test response time
+          response_time=$(curl -k -w "%{time_total}" -s -o /dev/null https://localhost:8082/api/actuator/health)
+          echo "Response time: ${response_time}s"
+
+          if (( $(echo "$response_time > 5.0" | bc -l) )); then
+            echo "Response time too high: ${response_time}s"
+            exit 1
+          fi
+
+          echo "Performance validation passed!"
+        '
+
+    - name: Send deployment success notification
+      if: success()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: success
+        channel: '#production-deployments'
+        webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+        fields: |
+          {
+            "attachments": [
+              {
+                "color": "good",
+                "fields": [
+                  {
+                    "title": "🚀 Production Deployment Successful",
+                    "value": "EV Booking Backend has been successfully deployed to production",
+                    "short": false
+                  },
+                  {
+                    "title": "Environment",
+                    "value": "Production",
+                    "short": true
+                  },
+                  {
+                    "title": "Branch",
+                    "value": "${{ github.ref_name }}",
+                    "short": true
+                  },
+                  {
+                    "title": "Commit",
+                    "value": "${{ github.sha }}",
+                    "short": true
+                  },
+                  {
+                    "title": "Deployed By",
+                    "value": "${{ github.actor }}",
+                    "short": true
+                  },
+                  {
+                    "title": "Production URL",
+                    "value": "https://api.evbooking.com",
+                    "short": false
+                  }
+                ]
+              }
+            ]
+          }
+
+  rollback-on-failure:
+    name: Rollback on Failure
+    runs-on: ubuntu-latest
+    needs: deploy-production
+    if: failure()
+
+    steps:
+    - name: Setup SSH
+      uses: webfactory/ssh-agent@v0.8.0
+      with:
+        ssh-private-key: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
+
+    - name: Add production server to known hosts
+      run: |
+        mkdir -p ~/.ssh
+        ssh-keyscan -H ${{ secrets.PRODUCTION_HOST }} >> ~/.ssh/known_hosts
+
+    - name: Perform emergency rollback
+      run: |
+        ssh ${{ secrets.PRODUCTION_USER }}@${{ secrets.PRODUCTION_HOST }} '
+          cd ~/ev-booking-production
+
+          echo "EMERGENCY: Rolling back production deployment..."
+
+          # Stop current containers
+          docker-compose -f docker-compose.production.yml down
+
+          # Restore from latest backup
+          LATEST_BACKUP=$(ls -t backups/ | head -1)
+          if [ ! -z "$LATEST_BACKUP" ]; then
+            echo "Restoring from backup: $LATEST_BACKUP"
+
+            # Restore database if backup exists
+            if [ -f "backups/$LATEST_BACKUP/database_backup.sql" ]; then
+              echo "Restoring database..."
+              docker-compose -f docker-compose.production.yml up -d postgres
+              sleep 30
+              docker-compose -f docker-compose.production.yml exec -T postgres psql -U ${POSTGRES_USER:-ev_prod_user} -d ${POSTGRES_DB:-ev_booking_prod_db} < "backups/$LATEST_BACKUP/database_backup.sql"
+            fi
+
+            # Restore uploads if backup exists
+            if [ -f "backups/$LATEST_BACKUP/uploads_backup.tar.gz" ]; then
+              echo "Restoring uploads..."
+              tar -xzf "backups/$LATEST_BACKUP/uploads_backup.tar.gz"
+            fi
+          fi
+
+          echo "Rollback completed. Manual intervention required."
+        '
+
+    - name: Send rollback notification
+      uses: 8398a7/action-slack@v3
+      with:
+        status: failure
+        channel: '#production-alerts'
+        webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+        fields: |
+          {
+            "attachments": [
+              {
+                "color": "danger",
+                "fields": [
+                  {
+                    "title": "🚨 PRODUCTION DEPLOYMENT FAILED - ROLLBACK INITIATED",
+                    "value": "Production deployment failed. Emergency rollback has been triggered.",
+                    "short": false
+                  },
+                  {
+                    "title": "Action Required",
+                    "value": "Manual intervention needed. Check logs and investigate.",
+                    "short": false
+                  }
+                ]
+              }
+            ]
+          }
