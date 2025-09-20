@@ -39,12 +39,12 @@ jobs:
             --exclude='build' \
             --warning=no-file-changed \
             -czf project.tar.gz . || [ $? -eq 1 ]
-        scp -o StrictHostKeyChecking=no project.tar.gz ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}:/opt/ev-backend/
-        ssh -o StrictHostKeyChecking=no ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} "cd /opt/ev-backend && tar -xzf project.tar.gz && rm project.tar.gz"
+        scp -o StrictHostKeyChecking=no project.tar.gz "${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}:/opt/ev-backend/"
+        ssh -o StrictHostKeyChecking=no "${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}" "cd /opt/ev-backend && tar -xzf project.tar.gz && rm project.tar.gz"
 
     - name: Create environment file on staging server
       run: |
-        ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} "cd /opt/ev-backend && cat > .env.staging << 'EOF'
+        ssh "${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}" "cd /opt/ev-backend && cat > .env.staging << 'EOF'
         POSTGRES_PASSWORD=${{ secrets.STAGING_POSTGRES_PASSWORD }}
         DB_PASSWORD=${{ secrets.STAGING_DB_PASSWORD }}
         REDIS_PASSWORD=${{ secrets.STAGING_REDIS_PASSWORD }}
@@ -59,7 +59,7 @@ jobs:
 
     - name: Deploy to staging
       run: |
-        ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} "cd /opt/ev-backend && chmod +x scripts/deployment/deploy-staging.sh && ./scripts/deployment/deploy-staging.sh"
+        ssh "${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}" "cd /opt/ev-backend && chmod +x scripts/deployment/deploy-staging.sh && ./scripts/deployment/deploy-staging.sh"
 
     - name: Wait for application to start
       run: |
@@ -68,15 +68,15 @@ jobs:
 
     - name: Run health checks
       run: |
-        ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} "curl -f http://localhost:8081/api/actuator/health"
+        ssh "${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}" "curl -f http://localhost:8081/api/actuator/health"
 
     - name: Run smoke tests
       run: |
-        ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} "curl -f http://localhost:8081/api/actuator/health && curl -f http://localhost:8081/api/actuator/info && curl -f http://localhost:8081/api/swagger-ui.html"
+        ssh "${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}" "curl -f http://localhost:8081/api/actuator/health && curl -f http://localhost:8081/api/actuator/info && curl -f http://localhost:8081/api/swagger-ui.html"
 
     - name: Cleanup old images
       run: |
-        ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} "docker image prune -a -f --filter 'until=72h'"
+        ssh "${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}" "docker image prune -a -f --filter 'until=72h'"
 
 
   post-deployment-tests:
