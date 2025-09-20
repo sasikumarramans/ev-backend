@@ -113,48 +113,6 @@ jobs:
           docker image prune -a -f --filter "until=72h"
         '
 
-    - name: Send Slack notification
-      if: always()
-      uses: 8398a7/action-slack@v3
-      with:
-        status: ${{ job.status }}
-        channel: '#deployments'
-        webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
-        fields: |
-          {
-            "attachments": [
-              {
-                "color": "${{ job.status == 'success' && 'good' || 'danger' }}",
-                "fields": [
-                  {
-                    "title": "Environment",
-                    "value": "Staging",
-                    "short": true
-                  },
-                  {
-                    "title": "Status",
-                    "value": "${{ job.status }}",
-                    "short": true
-                  },
-                  {
-                    "title": "Branch",
-                    "value": "${{ github.ref_name }}",
-                    "short": true
-                  },
-                  {
-                    "title": "Commit",
-                    "value": "${{ github.sha }}",
-                    "short": true
-                  },
-                  {
-                    "title": "URL",
-                    "value": "https://staging.evbooking.com",
-                    "short": false
-                  }
-                ]
-              }
-            ]
-          }
 
   post-deployment-tests:
     name: Post-deployment Tests
