@@ -25,6 +25,10 @@ jobs:
       run: |
         mkdir -p ~/.ssh
         ssh-keyscan -H ${{ secrets.STAGING_HOST }} >> ~/.ssh/known_hosts
+        # Also disable strict host key checking for first connection
+        echo "Host ${{ secrets.STAGING_HOST }}" >> ~/.ssh/config
+        echo "  StrictHostKeyChecking no" >> ~/.ssh/config
+        echo "  UserKnownHostsFile=/dev/null" >> ~/.ssh/config
 
     - name: Create deployment directory on staging server
       run: |
