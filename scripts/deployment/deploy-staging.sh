@@ -44,6 +44,11 @@ while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
         break
     else
         echo "Attempt $ATTEMPT/$MAX_ATTEMPTS failed, retrying in 10 seconds..."
+        # Show recent logs every 5 attempts to debug issues
+        if [ $((ATTEMPT % 5)) -eq 0 ]; then
+            echo -e "${YELLOW}Checking recent application logs...${NC}"
+            docker compose -f docker-compose.staging.yml logs --tail=20 app
+        fi
         sleep 10
         ATTEMPT=$((ATTEMPT + 1))
     fi
