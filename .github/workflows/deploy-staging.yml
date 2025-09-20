@@ -30,10 +30,6 @@ jobs:
         echo "  StrictHostKeyChecking no" >> ~/.ssh/config
         echo "  UserKnownHostsFile=/dev/null" >> ~/.ssh/config
 
-    - name: Create deployment directory on staging server
-      run: |
-        ssh -o StrictHostKeyChecking=no ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} mkdir -p ev-booking-staging
-
     - name: Copy all project files to staging server
       run: |
         # Copy entire project to server for local building
@@ -43,12 +39,12 @@ jobs:
             --exclude='build' \
             --warning=no-file-changed \
             -czf project.tar.gz . || [ $? -eq 1 ]
-        scp -o StrictHostKeyChecking=no project.tar.gz ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}:ev-booking-staging/
-        ssh -o StrictHostKeyChecking=no ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} "cd ev-booking-staging && tar -xzf project.tar.gz && rm project.tar.gz"
+        scp -o StrictHostKeyChecking=no project.tar.gz ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}:/opt/ev-backend/
+        ssh -o StrictHostKeyChecking=no ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} "cd /opt/ev-backend && tar -xzf project.tar.gz && rm project.tar.gz"
 
     - name: Create environment file on staging server
       run: |
-        ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} "cd ev-booking-staging && cat > .env.staging << 'EOF'
+        ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} "cd /opt/ev-backend && cat > .env.staging << 'EOF'
         POSTGRES_PASSWORD=${{ secrets.STAGING_POSTGRES_PASSWORD }}
         DB_PASSWORD=${{ secrets.STAGING_DB_PASSWORD }}
         REDIS_PASSWORD=${{ secrets.STAGING_REDIS_PASSWORD }}
@@ -63,7 +59,7 @@ jobs:
 
     - name: Deploy to staging
       run: |
-        ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} "cd ev-booking-staging && chmod +x scripts/deployment/deploy-staging.sh && ./scripts/deployment/deploy-staging.sh"
+        ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} "cd /opt/ev-backend && chmod +x scripts/deployment/deploy-staging.sh && ./scripts/deployment/deploy-staging.sh"
 
     - name: Wait for application to start
       run: |
