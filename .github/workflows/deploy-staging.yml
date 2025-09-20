@@ -32,7 +32,7 @@ jobs:
 
     - name: Create deployment directory on staging server
       run: |
-        ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} "mkdir -p /root/ev-booking-staging"
+        ssh -o StrictHostKeyChecking=no ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} mkdir -p /root/ev-booking-staging
 
     - name: Copy all project files to staging server
       run: |
