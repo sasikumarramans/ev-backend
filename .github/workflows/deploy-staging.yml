@@ -41,7 +41,7 @@ jobs:
                    --exclude='node_modules' \
                    --exclude='target' \
                    --exclude='build' \
-                   ./ ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}:ev-booking-staging/
+                   ./ ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}:./ev-booking-staging/
 
     - name: Create environment file on staging server
       run: |
