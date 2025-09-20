@@ -41,9 +41,10 @@ jobs:
             --exclude='node_modules' \
             --exclude='target' \
             --exclude='build' \
-            -czf project.tar.gz .
-        scp project.tar.gz ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}:ev-booking-staging/
-        ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} "cd ev-booking-staging && tar -xzf project.tar.gz && rm project.tar.gz"
+            --warning=no-file-changed \
+            -czf project.tar.gz . || [ $? -eq 1 ]
+        scp -o StrictHostKeyChecking=no project.tar.gz ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}:ev-booking-staging/
+        ssh -o StrictHostKeyChecking=no ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} "cd ev-booking-staging && tar -xzf project.tar.gz && rm project.tar.gz"
 
     - name: Create environment file on staging server
       run: |
