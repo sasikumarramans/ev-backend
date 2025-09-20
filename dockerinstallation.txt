@@ -58,3 +58,8 @@ journalctl -xeu docker.service --no-pager
 
 # Check available kernel modules
 find /lib/modules/$(uname -r) -name "*.ko" | grep -E "(xt_addrtype|br_netfilter|ip_tables)"
+
+#rebuild and deploy
+ docker compose -f docker-compose.staging.yml down app
+  docker compose -f docker-compose.staging.yml build app
+  docker compose -f docker-compose.staging.yml up -d app

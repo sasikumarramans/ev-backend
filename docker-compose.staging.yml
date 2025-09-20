@@ -42,26 +42,29 @@ services:
       context: .
       dockerfile: Dockerfile.staging
     container_name: ev-booking-staging-app
-    network_mode: "host"
     environment:
       SPRING_PROFILES_ACTIVE: staging
-      DB_HOST: localhost
-      DB_PORT: 5433
+      DB_HOST: postgres
+      DB_PORT: 5432
       DB_NAME: ev_booking_staging_db
       DB_USERNAME: ev_staging_user
       DB_PASSWORD: ${DB_PASSWORD:-StaG1ng_P@ssw0rd_2024!}
-      REDIS_HOST: localhost
-      REDIS_PORT: 6380
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-staging-super-secret-key}
       MAIL_USERNAME: ${MAIL_USERNAME:-staging@evbooking.com}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-staging_mail_password}
       STRIPE_PUBLIC_KEY: ${STRIPE_PUBLIC_KEY_STAGING:-pk_test_staging}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY_STAGING:-sk_test_staging}
+    ports:
+      - "8081:8080"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks:
+      - ev-booking-staging-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/actuator/health"]
@@ -96,3 +99,6 @@ volumes:
 networks:
   ev-booking-staging-network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
