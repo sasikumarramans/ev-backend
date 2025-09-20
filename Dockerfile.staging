@@ -30,19 +30,18 @@ RUN addgroup -S evbooking && adduser -S evbooking -G evbooking
 # Copy built jar
 COPY --from=builder /app/build/libs/*.jar app.jar
 
+# Install su-exec for user switching
+RUN apk add --no-cache su-exec
+
 # Create directories with proper permissions
 RUN mkdir -p /app/logs /app/uploads && \
     chown -R evbooking:evbooking /app
 
-# Switch to non-root user
-USER evbooking
-
-# Ensure the entrypoint script can fix permissions
-USER root
+# Create entrypoint script as root
 RUN echo '#!/bin/sh\nchown -R evbooking:evbooking /app/logs /app/uploads 2>/dev/null || true\nexec su-exec evbooking "$@"' > /entrypoint.sh && \
-    chmod +x /entrypoint.sh && \
-    apk add --no-cache su-exec
+    chmod +x /entrypoint.sh
 
+# Switch to non-root user for final setup
 USER evbooking
 
 EXPOSE 8080
