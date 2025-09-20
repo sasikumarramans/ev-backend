@@ -49,7 +49,7 @@ services:
       DB_PORT: 5433
       DB_NAME: ev_booking_staging_db
       DB_USERNAME: ev_staging_user
-      DB_PASSWORD: ${DB_PASSWORD:-staging_password}
+      DB_PASSWORD: ${DB_PASSWORD:-StaG1ng_P@ssw0rd_2024!}
       REDIS_HOST: localhost
       REDIS_PORT: 6380
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-staging-super-secret-key}
