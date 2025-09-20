@@ -32,9 +32,7 @@ jobs:
 
     - name: Create deployment directory on staging server
       run: |
-        ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} '
-          mkdir -p ~/ev-booking-staging
-        '
+        ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} 'mkdir -p ~/ev-booking-staging'
 
     - name: Copy all project files to staging server
       run: |
@@ -47,75 +45,39 @@ jobs:
 
     - name: Create environment file on staging server
       run: |
-        ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} '
-          cd ~/ev-booking-staging
-          cat > .env.staging << EOF
-          POSTGRES_PASSWORD=${{ secrets.STAGING_POSTGRES_PASSWORD }}
-          DB_PASSWORD=${{ secrets.STAGING_DB_PASSWORD }}
-          REDIS_PASSWORD=${{ secrets.STAGING_REDIS_PASSWORD }}
-          JWT_SECRET_KEY=${{ secrets.STAGING_JWT_SECRET_KEY }}
-          MAIL_USERNAME=${{ secrets.STAGING_MAIL_USERNAME }}
-          MAIL_PASSWORD=${{ secrets.STAGING_MAIL_PASSWORD }}
-          STRIPE_PUBLIC_KEY_STAGING=${{ secrets.STAGING_STRIPE_PUBLIC_KEY }}
-          STRIPE_SECRET_KEY_STAGING=${{ secrets.STAGING_STRIPE_SECRET_KEY }}
-          CORS_ALLOWED_ORIGINS=${{ secrets.STAGING_CORS_ALLOWED_ORIGINS }}
-          WEBHOOK_URL=${{ secrets.STAGING_WEBHOOK_URL }}
-          EOF
-        '
+        ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} "cd ~/ev-booking-staging && cat > .env.staging << 'EOF'
+        POSTGRES_PASSWORD=${{ secrets.STAGING_POSTGRES_PASSWORD }}
+        DB_PASSWORD=${{ secrets.STAGING_DB_PASSWORD }}
+        REDIS_PASSWORD=${{ secrets.STAGING_REDIS_PASSWORD }}
+        JWT_SECRET_KEY=${{ secrets.STAGING_JWT_SECRET_KEY }}
+        MAIL_USERNAME=${{ secrets.STAGING_MAIL_USERNAME }}
+        MAIL_PASSWORD=${{ secrets.STAGING_MAIL_PASSWORD }}
+        STRIPE_PUBLIC_KEY_STAGING=${{ secrets.STAGING_STRIPE_PUBLIC_KEY }}
+        STRIPE_SECRET_KEY_STAGING=${{ secrets.STAGING_STRIPE_SECRET_KEY }}
+        CORS_ALLOWED_ORIGINS=${{ secrets.STAGING_CORS_ALLOWED_ORIGINS }}
+        WEBHOOK_URL=${{ secrets.STAGING_WEBHOOK_URL }}
+        EOF"
 
     - name: Deploy to staging
       run: |
-        ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} '
-          cd ~/ev-booking-staging
-          chmod +x deploy-staging.sh
-          ./deploy-staging.sh
-        '
+        ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} "cd ~/ev-booking-staging && chmod +x scripts/deployment/deploy-staging.sh && ./scripts/deployment/deploy-staging.sh"
+
+    - name: Wait for application to start
+      run: |
+        echo "Waiting for application to start..."
+        sleep 30
 
     - name: Run health checks
       run: |
-        ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} '
-          echo "Waiting for application to start..."
-          sleep 30
-
-          # Health check with retry
-          for i in {1..10}; do
-            if curl -f http://localhost:8081/api/actuator/health; then
-              echo "Health check passed!"
-              break
-            else
-              echo "Health check failed, attempt $i/10"
-              sleep 10
-            fi
-          done
-
-          # Final health check
-          curl -f http://localhost:8081/api/actuator/health || exit 1
-        '
+        ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} "curl -f http://localhost:8081/api/actuator/health"
 
     - name: Run smoke tests
       run: |
-        ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} '
-          # Test API endpoints
-          echo "Running smoke tests..."
-
-          # Test health endpoint
-          curl -f http://localhost:8081/api/actuator/health
-
-          # Test info endpoint
-          curl -f http://localhost:8081/api/actuator/info
-
-          # Test swagger endpoint
-          curl -f http://localhost:8081/api/swagger-ui.html
-
-          echo "Smoke tests passed!"
-        '
+        ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} "curl -f http://localhost:8081/api/actuator/health && curl -f http://localhost:8081/api/actuator/info && curl -f http://localhost:8081/api/swagger-ui.html"
 
     - name: Cleanup old images
       run: |
-        ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} '
-          # Remove old Docker images to save space
-          docker image prune -a -f --filter "until=72h"
-        '
+        ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} "docker image prune -a -f --filter 'until=72h'"
 
 
   post-deployment-tests:
