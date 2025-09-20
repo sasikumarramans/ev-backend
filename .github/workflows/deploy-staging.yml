@@ -37,11 +37,13 @@ jobs:
     - name: Copy all project files to staging server
       run: |
         # Copy entire project to server for local building
-        rsync -avz --exclude='.git' \
-                   --exclude='node_modules' \
-                   --exclude='target' \
-                   --exclude='build' \
-                   ./ ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}:./ev-booking-staging/
+        tar --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='target' \
+            --exclude='build' \
+            -czf project.tar.gz .
+        scp project.tar.gz ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}:ev-booking-staging/
+        ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} "cd ev-booking-staging && tar -xzf project.tar.gz && rm project.tar.gz"
 
     - name: Create environment file on staging server
       run: |
