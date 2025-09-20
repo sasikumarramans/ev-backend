@@ -36,27 +36,27 @@ public class SecurityConfig {
             .exceptionHandling(exception -> exception.authenticationEntryPoint(jwtAuthenticationEntryPoint))
             .authorizeHttpRequests(authz -> authz
                 // Public endpoints
-                .requestMatchers("/api/auth/**").permitAll()
-                .requestMatchers("/api/public/**").permitAll()
+                .requestMatchers("/auth/**").permitAll()
+                .requestMatchers("/public/**").permitAll()
 
                 // Actuator endpoints
-                .requestMatchers("/api/actuator/health").permitAll()
-                .requestMatchers("/api/actuator/info").permitAll()
-                .requestMatchers("/api/actuator/**").hasRole("ADMIN")
+                .requestMatchers("/actuator/health").permitAll()
+                .requestMatchers("/actuator/info").permitAll()
+                .requestMatchers("/actuator/**").hasRole("ADMIN")
 
                 // API Documentation
-                .requestMatchers("/api/swagger-ui/**").permitAll()
-                .requestMatchers("/api/swagger-ui.html").permitAll()
-                .requestMatchers("/api/v3/api-docs/**").permitAll()
+                .requestMatchers("/swagger-ui/**").permitAll()
+                .requestMatchers("/swagger-ui.html").permitAll()
+                .requestMatchers("/v3/api-docs/**").permitAll()
 
                 // Admin endpoints
-                .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                .requestMatchers("/admin/**").hasRole("ADMIN")
 
                 // Station owner endpoints
-                .requestMatchers("/api/owner/**").hasAnyRole("STATION_OWNER", "ADMIN")
+                .requestMatchers("/owner/**").hasAnyRole("STATION_OWNER", "ADMIN")
 
                 // Customer endpoints
-                .requestMatchers("/api/customer/**").hasAnyRole("CUSTOMER", "STATION_OWNER", "ADMIN")
+                .requestMatchers("/customer/**").hasAnyRole("CUSTOMER", "STATION_OWNER", "ADMIN")
 
                 // All other requests require authentication
                 .anyRequest().authenticated()
