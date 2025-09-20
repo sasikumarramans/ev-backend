@@ -5,8 +5,6 @@ on:
     branches: [ development ]
   workflow_dispatch:
 
-env:
-  DOCKER_IMAGE: ${{ secrets.DOCKER_USERNAME }}/ev-booking-backend
 
 jobs:
   deploy-staging:
@@ -17,25 +15,6 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-
-    - name: Login to Docker Hub
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
-
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        file: ./Dockerfile.staging
-        push: true
-        tags: ${{ env.DOCKER_IMAGE }}:staging-${{ github.sha }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
 
     - name: Setup SSH
       uses: webfactory/ssh-agent@v0.8.0
@@ -53,14 +32,14 @@ jobs:
           mkdir -p ~/ev-booking-staging
         '
 
-    - name: Copy deployment files to staging server
+    - name: Copy all project files to staging server
       run: |
-        scp -r docker-compose.staging.yml \
-               Dockerfile.staging \
-               nginx/staging.conf \
-               scripts/deployment/deploy-staging.sh \
-               .env.staging.example \
-               ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}:~/ev-booking-staging/
+        # Copy entire project to server for local building
+        rsync -avz --exclude='.git' \
+                   --exclude='node_modules' \
+                   --exclude='target' \
+                   --exclude='build' \
+                   ./ ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}:~/ev-booking-staging/
 
     - name: Create environment file on staging server
       run: |
@@ -77,17 +56,7 @@ jobs:
           STRIPE_SECRET_KEY_STAGING=${{ secrets.STAGING_STRIPE_SECRET_KEY }}
           CORS_ALLOWED_ORIGINS=${{ secrets.STAGING_CORS_ALLOWED_ORIGINS }}
           WEBHOOK_URL=${{ secrets.STAGING_WEBHOOK_URL }}
-          DOCKER_IMAGE_TAG=staging-${{ github.sha }}
           EOF
-        '
-
-    - name: Update Docker image tag in compose file
-      run: |
-        ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} '
-          cd ~/ev-booking-staging
-          sed -i "s|build:|image: ${{ env.DOCKER_IMAGE }}:staging-${{ github.sha }}|g" docker-compose.staging.yml
-          sed -i "/dockerfile:/d" docker-compose.staging.yml
-          sed -i "/context:/d" docker-compose.staging.yml
         '
 
     - name: Deploy to staging
