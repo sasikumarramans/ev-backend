@@ -40,7 +40,17 @@ echo -e "${YELLOW}Stopping existing staging containers...${NC}"
 docker compose -f docker-compose.staging.yml down
 
 echo -e "${YELLOW}Starting staging services...${NC}"
-docker compose -f docker-compose.staging.yml up -d
+docker compose -f docker-compose.staging.yml up -d --remove-orphans
+echo -e "${YELLOW}Waiting for PostgreSQL to initialize...${NC}"
+sleep 20
+
+# Check if postgres is having issues
+if ! docker compose -f docker-compose.staging.yml ps postgres | grep -q "healthy\|running"; then
+    echo -e "${RED}PostgreSQL container failed to start properly${NC}"
+    echo -e "${YELLOW}PostgreSQL logs:${NC}"
+    docker compose -f docker-compose.staging.yml logs postgres
+    exit 1
+fi
 
 echo -e "${YELLOW}Waiting for services to be ready...${NC}"
 sleep 30

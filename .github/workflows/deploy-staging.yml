@@ -5,7 +5,6 @@ on:
     branches: [ development ]
   workflow_dispatch:
 
-
 jobs:
   deploy-staging:
     name: Deploy to Staging Environment
@@ -13,145 +12,129 @@ jobs:
     environment: staging
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Setup SSH
-      uses: webfactory/ssh-agent@v0.8.0
-      with:
-        ssh-private-key: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
 
-    - name: Add staging server to known hosts
-      run: |
-        # Clean staging host variable
-        STAGING_HOST="${{ secrets.STAGING_HOST }}"
-        STAGING_HOST=$(echo "$STAGING_HOST" | tr -d '\n\r' | xargs)
+      - name: Add staging server to known hosts
+        run: |
+          # Clean staging host variable
+          STAGING_HOST="${{ secrets.STAGING_HOST }}"
+          STAGING_HOST=$(echo "$STAGING_HOST" | tr -d '\n\r' | xargs)
+          
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "$STAGING_HOST" >> ~/.ssh/known_hosts
+          # Also disable strict host key checking for first connection
+          echo "Host $STAGING_HOST" >> ~/.ssh/config
+          echo "  StrictHostKeyChecking no" >> ~/.ssh/config
+          echo "  UserKnownHostsFile=/dev/null" >> ~/.ssh/config
 
-        mkdir -p ~/.ssh
-        ssh-keyscan -H "$STAGING_HOST" >> ~/.ssh/known_hosts
-        # Also disable strict host key checking for first connection
-        echo "Host $STAGING_HOST" >> ~/.ssh/config
-        echo "  StrictHostKeyChecking no" >> ~/.ssh/config
-        echo "  UserKnownHostsFile=/dev/null" >> ~/.ssh/config
+      - name: Copy all project files to staging server
+        run: |
+          # Set variables and clean them
+          STAGING_USER="${{ secrets.STAGING_USER }}"
+          STAGING_HOST="${{ secrets.STAGING_HOST }}"
+          
+          # Remove any whitespace/newlines
+          STAGING_USER=$(echo "$STAGING_USER" | tr -d '\n\r' | xargs)
+          STAGING_HOST=$(echo "$STAGING_HOST" | tr -d '\n\r' | xargs)
+          
+          echo "Connecting to: $STAGING_USER@$STAGING_HOST"
+          
+          # Copy entire project to server for local building
+          tar --exclude='.git' \
+              --exclude='node_modules' \
+              --exclude='target' \
+              --exclude='build' \
+              --warning=no-file-changed \
+              -czf project.tar.gz . || [ $? -eq 1 ]
+          scp -o StrictHostKeyChecking=no project.tar.gz "$STAGING_USER@$STAGING_HOST:/opt/ev-backend/"
+          ssh -o StrictHostKeyChecking=no "$STAGING_USER@$STAGING_HOST" "cd /opt/ev-backend && tar -xzf project.tar.gz && rm project.tar.gz"
 
-    - name: Copy all project files to staging server
-      run: |
-        # Set variables and clean them
-        STAGING_USER="${{ secrets.STAGING_USER }}"
-        STAGING_HOST="${{ secrets.STAGING_HOST }}"
+      - name: Create environment file on staging server
+        run: |
+          # Set and clean variables
+          STAGING_USER="${{ secrets.STAGING_USER }}"
+          STAGING_HOST="${{ secrets.STAGING_HOST }}"
+          STAGING_USER=$(echo "$STAGING_USER" | tr -d '\n\r' | xargs)
+          STAGING_HOST=$(echo "$STAGING_HOST" | tr -d '\n\r' | xargs)
+          
+          ssh "$STAGING_USER@$STAGING_HOST" "cd /opt/ev-backend && cat > .env.staging << 'EOF'
+          POSTGRES_PASSWORD=${{ secrets.STAGING_POSTGRES_PASSWORD }}
+          DB_PASSWORD=${{ secrets.STAGING_DB_PASSWORD }}
+          REDIS_PASSWORD=${{ secrets.STAGING_REDIS_PASSWORD }}
+          JWT_SECRET_KEY=${{ secrets.STAGING_JWT_SECRET_KEY }}
+          MAIL_USERNAME=${{ secrets.STAGING_MAIL_USERNAME }}
+          MAIL_PASSWORD=${{ secrets.STAGING_MAIL_PASSWORD }}
+          STRIPE_PUBLIC_KEY_STAGING=${{ secrets.STAGING_STRIPE_PUBLIC_KEY }}
+          STRIPE_SECRET_KEY_STAGING=${{ secrets.STAGING_STRIPE_SECRET_KEY }}
+          CORS_ALLOWED_ORIGINS=${{ secrets.STAGING_CORS_ALLOWED_ORIGINS }}
+          WEBHOOK_URL=${{ secrets.STAGING_WEBHOOK_URL }}
+          EOF"
 
-        # Remove any whitespace/newlines
-        STAGING_USER=$(echo "$STAGING_USER" | tr -d '\n\r' | xargs)
-        STAGING_HOST=$(echo "$STAGING_HOST" | tr -d '\n\r' | xargs)
+      - name: Deploy to staging
+        run: |
+          # Set and clean variables
+          STAGING_USER="${{ secrets.STAGING_USER }}"
+          STAGING_HOST="${{ secrets.STAGING_HOST }}"
+          STAGING_USER=$(echo "$STAGING_USER" | tr -d '\n\r' | xargs)
+          STAGING_HOST=$(echo "$STAGING_HOST" | tr -d '\n\r' | xargs)
+          
+          ssh "$STAGING_USER@$STAGING_HOST" "cd /opt/ev-backend && chmod +x scripts/deployment/deploy-staging.sh && ./scripts/deployment/deploy-staging.sh"
 
-        echo "Connecting to: $STAGING_USER@$STAGING_HOST"
+      - name: Wait for application to start
+        run: |
+          echo "Waiting for application to start..."
+          sleep 60
 
-        # Copy entire project to server for local building
-        tar --exclude='.git' \
-            --exclude='node_modules' \
-            --exclude='target' \
-            --exclude='build' \
-            --warning=no-file-changed \
-            -czf project.tar.gz . || [ $? -eq 1 ]
-        scp -o StrictHostKeyChecking=no project.tar.gz "$STAGING_USER@$STAGING_HOST:/opt/ev-backend/"
-        ssh -o StrictHostKeyChecking=no "$STAGING_USER@$STAGING_HOST" "cd /opt/ev-backend && tar -xzf project.tar.gz && rm project.tar.gz"
+      - name: Run health checks
+        run: |
+          # Set and clean variables
+          STAGING_USER="${{ secrets.STAGING_USER }}"
+          STAGING_HOST="${{ secrets.STAGING_HOST }}"
+          STAGING_USER=$(echo "$STAGING_USER" | tr -d '\n\r' | xargs)
+          STAGING_HOST=$(echo "$STAGING_HOST" | tr -d '\n\r' | xargs)
+          
+          ssh "$STAGING_USER@$STAGING_HOST" "curl -f http://localhost:8081/api/actuator/health"
 
-    - name: Create environment file on staging server
-      run: |
-        # Set and clean variables
-        STAGING_USER="${{ secrets.STAGING_USER }}"
-        STAGING_HOST="${{ secrets.STAGING_HOST }}"
-        STAGING_USER=$(echo "$STAGING_USER" | tr -d '\n\r' | xargs)
-        STAGING_HOST=$(echo "$STAGING_HOST" | tr -d '\n\r' | xargs)
+      - name: Run smoke tests
+        run: |
+          # Set and clean variables
+          STAGING_USER="${{ secrets.STAGING_USER }}"
+          STAGING_HOST="${{ secrets.STAGING_HOST }}"
+          STAGING_USER=$(echo "$STAGING_USER" | tr -d '\n\r' | xargs)
+          STAGING_HOST=$(echo "$STAGING_HOST" | tr -d '\n\r' | xargs)
+          
+          ssh "$STAGING_USER@$STAGING_HOST" "curl -f http://localhost:8081/api/actuator/health && curl -f http://localhost:8081/api/actuator/info && curl -f http://localhost:8081/api/swagger-ui.html"
 
-        ssh "$STAGING_USER@$STAGING_HOST" "cd /opt/ev-backend && cat > .env.staging << 'EOF'
-        POSTGRES_PASSWORD=${{ secrets.STAGING_POSTGRES_PASSWORD }}
-        DB_PASSWORD=${{ secrets.STAGING_DB_PASSWORD }}
-        REDIS_PASSWORD=${{ secrets.STAGING_REDIS_PASSWORD }}
-        JWT_SECRET_KEY=${{ secrets.STAGING_JWT_SECRET_KEY }}
-        MAIL_USERNAME=${{ secrets.STAGING_MAIL_USERNAME }}
-        MAIL_PASSWORD=${{ secrets.STAGING_MAIL_PASSWORD }}
-        STRIPE_PUBLIC_KEY_STAGING=${{ secrets.STAGING_STRIPE_PUBLIC_KEY }}
-        STRIPE_SECRET_KEY_STAGING=${{ secrets.STAGING_STRIPE_SECRET_KEY }}
-        CORS_ALLOWED_ORIGINS=${{ secrets.STAGING_CORS_ALLOWED_ORIGINS }}
-        WEBHOOK_URL=${{ secrets.STAGING_WEBHOOK_URL }}
-        EOF"
+      - name: Cleanup old images
+        run: |
+          # Set and clean variables
+          STAGING_USER="${{ secrets.STAGING_USER }}"
+          STAGING_HOST="${{ secrets.STAGING_HOST }}"
+          STAGING_USER=$(echo "$STAGING_USER" | tr -d '\n\r' | xargs)
+          STAGING_HOST=$(echo "$STAGING_HOST" | tr -d '\n\r' | xargs)
+          
+          ssh "$STAGING_USER@$STAGING_HOST" "docker image prune -a -f --filter 'until=72h'"
 
-    - name: Deploy to staging
-      run: |
-        # Set and clean variables
-        STAGING_USER="${{ secrets.STAGING_USER }}"
-        STAGING_HOST="${{ secrets.STAGING_HOST }}"
-        STAGING_USER=$(echo "$STAGING_USER" | tr -d '\n\r' | xargs)
-        STAGING_HOST=$(echo "$STAGING_HOST" | tr -d '\n\r' | xargs)
-
-        ssh "$STAGING_USER@$STAGING_HOST" "cd /opt/ev-backend && chmod +x scripts/deployment/deploy-staging.sh && ./scripts/deployment/deploy-staging.sh"
-
-    - name: Wait for application to start
-      run: |
-        echo "Waiting for application to start..."
-        sleep 60
-
-    - name: Run health checks
-      run: |
-        # Set and clean variables
-        STAGING_USER="${{ secrets.STAGING_USER }}"
-        STAGING_HOST="${{ secrets.STAGING_HOST }}"
-        STAGING_USER=$(echo "$STAGING_USER" | tr -d '\n\r' | xargs)
-        STAGING_HOST=$(echo "$STAGING_HOST" | tr -d '\n\r' | xargs)
-
-        ssh "$STAGING_USER@$STAGING_HOST" "curl -f http://localhost:8081/api/actuator/health"
-
-    - name: Run smoke tests
-      run: |
-        # Set and clean variables
-        STAGING_USER="${{ secrets.STAGING_USER }}"
-        STAGING_HOST="${{ secrets.STAGING_HOST }}"
-        STAGING_USER=$(echo "$STAGING_USER" | tr -d '\n\r' | xargs)
-        STAGING_HOST=$(echo "$STAGING_HOST" | tr -d '\n\r' | xargs)
-
-        ssh "$STAGING_USER@$STAGING_HOST" "curl -f http://localhost:8081/api/actuator/health && curl -f http://localhost:8081/api/actuator/info && curl -f http://localhost:8081/api/swagger-ui.html"
-
-    - name: Cleanup old images
-      run: |
-        # Set and clean variables
-        STAGING_USER="${{ secrets.STAGING_USER }}"
-        STAGING_HOST="${{ secrets.STAGING_HOST }}"
-        STAGING_USER=$(echo "$STAGING_USER" | tr -d '\n\r' | xargs)
-        STAGING_HOST=$(echo "$STAGING_HOST" | tr -d '\n\r' | xargs)
-
-        ssh "$STAGING_USER@$STAGING_HOST" "docker image prune -a -f --filter 'until=72h'"
-
-
-  # post-deployment-tests:
-  #   name: Post-deployment Tests
-  #   runs-on: ubuntu-latest
-  #   needs: deploy-staging
-  #   if: success()
-
-  #   steps:
-  #   - name: Checkout code
-  #     uses: actions/checkout@v4
-
-  #   - name: Setup Node.js for API tests
-  #     uses: actions/setup-node@v3
-  #     with:
-  #       node-version: '18'
-
-  #   - name: Install Newman (Postman CLI)
-  #     run: npm install -g newman
-
-  #   - name: Run API tests
-  #     run: |
-  #       # Run Postman collection against staging
-  #       newman run tests/postman/ev-booking-api.postman_collection.json \
-  #         -e tests/postman/staging.postman_environment.json \
-  #         --reporters cli,json \
-  #         --reporter-json-export staging-test-results.json
-
-  #   - name: Upload test results
-  #     uses: actions/upload-artifact@v3
-  #     if: always()
-  #     with:
-  #       name: staging-api-test-results
-  #       path: staging-test-results.json
+      # ADD THIS STEP HERE - after all the existing steps
+      - name: Debug PostgreSQL failure
+        if: failure()
+        run: |
+          STAGING_USER="${{ secrets.STAGING_USER }}"
+          STAGING_HOST="${{ secrets.STAGING_HOST }}"
+          STAGING_USER=$(echo "$STAGING_USER" | tr -d '\n\r' | xargs)
+          STAGING_HOST=$(echo "$STAGING_HOST" | tr -d '\n\r' | xargs)
+          
+          echo "=== Container Status ==="
+          ssh "$STAGING_USER@$STAGING_HOST" "cd /opt/ev-backend && docker compose -f docker-compose.staging.yml ps"
+          
+          echo "=== PostgreSQL Logs ==="
+          ssh "$STAGING_USER@$STAGING_HOST" "cd /opt/ev-backend && docker compose -f docker-compose.staging.yml logs postgres"
+          
+          echo "=== Application Logs ==="
+          ssh "$STAGING_USER@$STAGING_HOST" "cd /opt/ev-backend && docker compose -f docker-compose.staging.yml logs app"
