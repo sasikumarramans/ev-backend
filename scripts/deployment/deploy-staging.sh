@@ -30,33 +30,7 @@ echo -e "${YELLOW}Starting staging services...${NC}"
 docker compose -f docker-compose.staging.yml up -d
 
 echo -e "${YELLOW}Waiting for services to be ready...${NC}"
-sleep 10
-
-echo -e "${YELLOW}Checking service status...${NC}"
-docker compose -f docker-compose.staging.yml ps
-
-echo -e "${YELLOW}Checking PostgreSQL logs...${NC}"
-docker compose -f docker-compose.staging.yml logs postgres
-
-echo -e "${YELLOW}Checking Redis logs...${NC}"
-docker compose -f docker-compose.staging.yml logs redis
-
-echo -e "${YELLOW}Testing network connectivity...${NC}"
-# Test if app container can resolve postgres
-docker compose -f docker-compose.staging.yml exec -T postgres pg_isready -U ev_staging_user -d ev_booking_staging_db || echo "PostgreSQL not ready"
-
-echo -e "${YELLOW}Waiting additional time for services...${NC}"
-sleep 20
-
-echo -e "${YELLOW}Testing network connectivity again...${NC}"
-docker compose -f docker-compose.staging.yml exec -T postgres pg_isready -U ev_staging_user -d ev_booking_staging_db || echo "PostgreSQL still not ready"
-
-echo -e "${YELLOW}Testing app container network access to postgres...${NC}"
-docker compose -f docker-compose.staging.yml exec -T app sh -c "nslookup postgres || echo 'DNS resolution failed'"
-docker compose -f docker-compose.staging.yml exec -T app sh -c "nc -zv postgres 5432 || echo 'Connection to postgres:5432 failed'"
-
-echo -e "${YELLOW}Checking app container environment variables...${NC}"
-docker compose -f docker-compose.staging.yml exec -T app env | grep -E "(DB_|POSTGRES_|SPRING_)"
+sleep 45
 
 # Health check
 echo -e "${YELLOW}Performing health checks...${NC}"
@@ -70,10 +44,9 @@ while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
         break
     else
         echo "Attempt $ATTEMPT/$MAX_ATTEMPTS failed, retrying in 10 seconds..."
-        # Show recent logs every 5 attempts to debug issues
-        if [ $((ATTEMPT % 5)) -eq 0 ]; then
-            echo -e "${YELLOW}Checking recent application logs...${NC}"
-            docker compose -f docker-compose.staging.yml logs --tail=20 app
+        if [ $ATTEMPT -eq 5 ]; then
+            echo -e "${YELLOW}Checking application logs...${NC}"
+            docker compose -f docker-compose.staging.yml logs --tail=30 app
         fi
         sleep 10
         ATTEMPT=$((ATTEMPT + 1))
