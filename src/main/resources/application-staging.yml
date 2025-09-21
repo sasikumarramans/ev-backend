@@ -5,10 +5,11 @@ spring:
     password: ${DB_PASSWORD:StaG1ng_P@ssw0rd_2024!}
     hikari:
       maximum-pool-size: 10
-      minimum-idle: 5
-      connection-timeout: 30000
-      idle-timeout: 600000
-      max-lifetime: 1800000
+      minimum-idle: 2
+      connection-timeout: 60000
+      idle-timeout: 300000
+      max-lifetime: 1200000
+      initialization-fail-timeout: 60000
 
   jpa:
     show-sql: false
