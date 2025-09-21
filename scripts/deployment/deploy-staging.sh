@@ -51,6 +51,13 @@ sleep 20
 echo -e "${YELLOW}Testing network connectivity again...${NC}"
 docker compose -f docker-compose.staging.yml exec -T postgres pg_isready -U ev_staging_user -d ev_booking_staging_db || echo "PostgreSQL still not ready"
 
+echo -e "${YELLOW}Testing app container network access to postgres...${NC}"
+docker compose -f docker-compose.staging.yml exec -T app sh -c "nslookup postgres || echo 'DNS resolution failed'"
+docker compose -f docker-compose.staging.yml exec -T app sh -c "nc -zv postgres 5432 || echo 'Connection to postgres:5432 failed'"
+
+echo -e "${YELLOW}Checking app container environment variables...${NC}"
+docker compose -f docker-compose.staging.yml exec -T app env | grep -E "(DB_|POSTGRES_|SPRING_)"
+
 # Health check
 echo -e "${YELLOW}Performing health checks...${NC}"
 HEALTH_URL="http://localhost:8081/api/actuator/health"
