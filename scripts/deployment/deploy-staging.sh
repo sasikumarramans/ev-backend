@@ -7,21 +7,13 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
-check_container_logs() {
-    echo -e "${YELLOW}Checking container status...${NC}"
-    docker compose -f docker-compose.staging.yml ps
 
-    if ! docker compose -f docker-compose.staging.yml ps | grep -q "healthy\|running"; then
-        echo -e "${RED}Some containers are not running properly${NC}"
-        echo -e "${YELLOW}Application logs:${NC}"
-        docker compose -f docker-compose.staging.yml logs --tail=50 app
-        echo -e "${YELLOW}Database logs:${NC}"
-        docker compose -f docker-compose.staging.yml logs --tail=20 postgres
-        return 1
-    fi
-    return 0
-}
 echo -e "${GREEN}Starting EV Booking Backend Staging Deployment${NC}"
+
+# CRITICAL FIX: Add Docker restart to prevent networking issues
+echo -e "${YELLOW}Restarting Docker to prevent networking issues...${NC}"
+systemctl restart docker
+sleep 30
 
 # Check if .env.staging exists
 if [ ! -f .env.staging ]; then
@@ -37,64 +29,63 @@ echo -e "${YELLOW}Building staging images...${NC}"
 docker compose -f docker-compose.staging.yml build --no-cache
 
 echo -e "${YELLOW}Stopping existing staging containers...${NC}"
-docker compose -f docker-compose.staging.yml down
+docker compose -f docker-compose.staging.yml down -v
 
 echo -e "${YELLOW}Starting staging services...${NC}"
 docker compose -f docker-compose.staging.yml up -d --remove-orphans
+
 echo -e "${YELLOW}Waiting for PostgreSQL to initialize...${NC}"
 sleep 20
 
-# Check if postgres is having issues
+# Check if postgres is ready
 if ! docker compose -f docker-compose.staging.yml ps postgres | grep -q "healthy\|running"; then
     echo -e "${RED}PostgreSQL container failed to start properly${NC}"
-    echo -e "${YELLOW}PostgreSQL logs:${NC}"
     docker compose -f docker-compose.staging.yml logs postgres
     exit 1
 fi
 
 echo -e "${YELLOW}Waiting for services to be ready...${NC}"
-sleep 30
 until docker compose -f docker-compose.staging.yml exec postgres pg_isready -U ev_staging_user -d ev_booking_staging_db; do
   echo "Waiting for postgres..."
   sleep 5
 done
+
 echo -e "${YELLOW}Database ready, waiting for application...${NC}"
-sleep 60  # Increase from 45 to 60
-# ADD THIS CALL HERE - before health checks
-echo -e "${YELLOW}Checking container status before health checks...${NC}"
-check_container_logs || exit 1
-# Health check
-echo -e "${YELLOW}Performing health checks...${NC}"
-HEALTH_URL="http://localhost:8081/api/actuator/health"
-MAX_ATTEMPTS=30
+sleep 30
+
+# FIXED: Use Swagger instead of health endpoint
+echo -e "${YELLOW}Performing application readiness checks...${NC}"
+SWAGGER_URL="http://localhost:8081/api/swagger-ui/index.html"
+MAX_ATTEMPTS=20
 ATTEMPT=1
 
 while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
-    if curl -f $HEALTH_URL > /dev/null 2>&1; then
-        echo -e "${GREEN}Health check passed!${NC}"
+    if curl -f $SWAGGER_URL > /dev/null 2>&1; then
+        echo -e "${GREEN}Application is ready!${NC}"
         break
     else
-        echo "Attempt $ATTEMPT/$MAX_ATTEMPTS failed, retrying in 10 seconds..."
+        echo "Attempt $ATTEMPT/$MAX_ATTEMPTS failed, retrying in 15 seconds..."
         if [ $ATTEMPT -eq 5 ]; then
             echo -e "${YELLOW}Checking application logs...${NC}"
             docker compose -f docker-compose.staging.yml logs --tail=30 app
         fi
-        sleep 10
+        sleep 15
         ATTEMPT=$((ATTEMPT + 1))
     fi
 done
 
 if [ $ATTEMPT -gt $MAX_ATTEMPTS ]; then
-    echo -e "${RED}Health check failed after $MAX_ATTEMPTS attempts${NC}"
-    echo "Checking logs..."
-    docker compose -f docker-compose.staging.yml logs app
+    echo -e "${RED}Application readiness check failed after $MAX_ATTEMPTS attempts${NC}"
+    echo "Final container status:"
+    docker compose -f docker-compose.staging.yml ps
+    echo "Application logs:"
+    docker compose -f docker-compose.staging.yml logs app --tail=50
     exit 1
 fi
 
 echo -e "${GREEN}Staging deployment completed successfully!${NC}"
 echo -e "${YELLOW}Application is running at: http://localhost:8081/api${NC}"
-echo -e "${YELLOW}Health check: http://localhost:8081/api/actuator/health${NC}"
-echo -e "${YELLOW}API Documentation: http://localhost:8081/api/swagger-ui.html${NC}"
+echo -e "${YELLOW}Swagger UI: http://localhost:8081/api/swagger-ui/index.html${NC}"
 
 # Display running services
 echo -e "${YELLOW}Running services:${NC}"

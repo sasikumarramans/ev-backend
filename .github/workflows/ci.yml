@@ -214,3 +214,27 @@ jobs:
         tags: ${{ secrets.DOCKER_USERNAME }}/ev-booking-backend:prod-${{ github.sha }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [ test, build, docker-build ]
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+
+    steps:
+      - name: Deploy to staging server
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            cd /opt/ev-backend
+            git pull origin develop
+            ./scripts/deployment/deploy-staging.sh
+
+      - name: Health Check
+        run: |
+          sleep 60
+          curl -f http://${{ secrets.STAGING_HOST }}:8081/api/swagger-ui/index.html
+

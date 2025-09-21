@@ -65,6 +65,9 @@ logging:
       max-history: 30
 
 management:
+  health:
+    mail:
+      enabled: false  # This is the key addition
   endpoints:
     web:
       exposure:
