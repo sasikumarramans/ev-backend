@@ -4,14 +4,15 @@ spring:
     username: ${DB_USERNAME:ev_staging_user}
     password: ${DB_PASSWORD:StaG1ng_P@ssw0rd_2024!}
     hikari:
-      maximum-pool-size: 5
+      maximum-pool-size: 3
       minimum-idle: 1
-      connection-timeout: 20000
+      connection-timeout: 60000
       validation-timeout: 5000
       idle-timeout: 300000
       max-lifetime: 1200000
-      initialization-fail-timeout: 30000
+      initialization-fail-timeout: 60000
       connection-test-query: SELECT 1
+      leak-detection-threshold: 60000
 
   jpa:
     show-sql: false

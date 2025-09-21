@@ -7,7 +7,20 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
+check_container_logs() {
+    echo -e "${YELLOW}Checking container status...${NC}"
+    docker compose -f docker-compose.staging.yml ps
 
+    if ! docker compose -f docker-compose.staging.yml ps | grep -q "healthy\|running"; then
+        echo -e "${RED}Some containers are not running properly${NC}"
+        echo -e "${YELLOW}Application logs:${NC}"
+        docker compose -f docker-compose.staging.yml logs --tail=50 app
+        echo -e "${YELLOW}Database logs:${NC}"
+        docker compose -f docker-compose.staging.yml logs --tail=20 postgres
+        return 1
+    fi
+    return 0
+}
 echo -e "${GREEN}Starting EV Booking Backend Staging Deployment${NC}"
 
 # Check if .env.staging exists
@@ -30,8 +43,16 @@ echo -e "${YELLOW}Starting staging services...${NC}"
 docker compose -f docker-compose.staging.yml up -d
 
 echo -e "${YELLOW}Waiting for services to be ready...${NC}"
-sleep 45
-
+sleep 30
+until docker compose -f docker-compose.staging.yml exec postgres pg_isready -U ev_staging_user -d ev_booking_staging_db; do
+  echo "Waiting for postgres..."
+  sleep 5
+done
+echo -e "${YELLOW}Database ready, waiting for application...${NC}"
+sleep 60  # Increase from 45 to 60
+# ADD THIS CALL HERE - before health checks
+echo -e "${YELLOW}Checking container status before health checks...${NC}"
+check_container_logs || exit 1
 # Health check
 echo -e "${YELLOW}Performing health checks...${NC}"
 HEALTH_URL="http://localhost:8081/api/actuator/health"
