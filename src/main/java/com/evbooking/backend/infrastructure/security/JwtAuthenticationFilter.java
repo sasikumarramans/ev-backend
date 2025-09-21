@@ -26,8 +26,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenService jwtTokenService;
 
-    // Static client token for initial API access
-    private static final String STATIC_CLIENT_TOKEN = "ev-booking-client-2024-v1-static-token";
+    // Static client token for initial API access - using Bearer token format
+    private static final String STATIC_CLIENT_TOKEN = "Bearer client_token_123456";
 
     public JwtAuthenticationFilter(JwtTokenService jwtTokenService) {
         this.jwtTokenService = jwtTokenService;
@@ -101,18 +101,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private boolean validateClientToken(HttpServletRequest request) {
-        String clientToken = request.getHeader("X-Client-Token");
+        String authHeader = request.getHeader("Authorization");
 
         // For now, use static token. In production, this could be more sophisticated
-        if (STATIC_CLIENT_TOKEN.equals(clientToken)) {
+        if (STATIC_CLIENT_TOKEN.equals(authHeader)) {
             return true;
         }
 
-        // Also check if it's a valid JWT client token
-        if (clientToken != null) {
+        // Also check if it's a valid JWT client token with Bearer prefix
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            String token = authHeader.substring(7);
             try {
-                return jwtTokenService.validateToken(clientToken) &&
-                       jwtTokenService.isClientApiToken(clientToken);
+                return jwtTokenService.validateToken(token) &&
+                       jwtTokenService.isClientApiToken(token);
             } catch (Exception e) {
                 logger.debug("Client token validation failed: {}", e.getMessage());
             }

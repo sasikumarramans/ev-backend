@@ -145,7 +145,7 @@ public class AuthController {
 
             ClientTokenResponse response = new ClientTokenResponse(
                 clientToken,
-                "Client API token generated successfully. Use this in X-Client-Token header."
+                "Client API token generated successfully. Use this in Authorization header with Bearer prefix."
             );
 
             return ResponseEntity.ok(ApiResponse.success(response));
