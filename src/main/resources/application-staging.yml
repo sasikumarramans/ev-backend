@@ -1,15 +1,17 @@
 spring:
   datasource:
-    url: jdbc:postgresql://${DB_HOST:postgres}:${DB_PORT:5432}/${DB_NAME:ev_booking_staging_db}
+    url: jdbc:postgresql://${DB_HOST:postgres}:${DB_PORT:5432}/${DB_NAME:ev_booking_staging_db}?connectTimeout=10&socketTimeout=30&loginTimeout=10
     username: ${DB_USERNAME:ev_staging_user}
     password: ${DB_PASSWORD:StaG1ng_P@ssw0rd_2024!}
     hikari:
-      maximum-pool-size: 10
-      minimum-idle: 2
-      connection-timeout: 60000
+      maximum-pool-size: 5
+      minimum-idle: 1
+      connection-timeout: 20000
+      validation-timeout: 5000
       idle-timeout: 300000
       max-lifetime: 1200000
-      initialization-fail-timeout: 60000
+      initialization-fail-timeout: 30000
+      connection-test-query: SELECT 1
 
   jpa:
     show-sql: false
