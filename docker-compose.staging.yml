@@ -48,13 +48,21 @@ services:
       DB_NAME: ev_booking_staging_db
       DB_USERNAME: ev_staging_user
       DB_PASSWORD: ${DB_PASSWORD:-StaG1ng_P@ssw0rd_2024!}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-StaG1ng_P@ssw0rd_2024!}
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-Red1s_StaG1ng_2024!}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-staging-super-secret-key}
+      CLIENT_TOKEN: ${CLIENT_TOKEN:-Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9}
       MAIL_USERNAME: ${MAIL_USERNAME:-staging@evbooking.com}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-staging_mail_password}
-      STRIPE_PUBLIC_KEY: ${STRIPE_PUBLIC_KEY_STAGING:-pk_test_staging}
-      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY_STAGING:-sk_test_staging}
+      STRIPE_PUBLIC_KEY_STAGING: ${STRIPE_PUBLIC_KEY_STAGING:-pk_test_staging}
+      STRIPE_SECRET_KEY_STAGING: ${STRIPE_SECRET_KEY_STAGING:-sk_test_staging}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://staging.evbooking.com}
+      MAX_FILE_SIZE: ${MAX_FILE_SIZE:-5MB}
+      UPLOAD_PATH: ${UPLOAD_PATH:-/app/uploads}
+      WEBHOOK_URL: ${WEBHOOK_URL:-https://staging-webhook.evbooking.com}
+      RATE_LIMIT_RPM: ${RATE_LIMIT_RPM:-200}
     ports:
       - "8081:8080"
     depends_on:
