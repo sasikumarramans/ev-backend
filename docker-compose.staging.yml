@@ -14,11 +14,11 @@ services:
       - ev-booking-staging-network
     restart: unless-stopped
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8080/api/actuator/health" ]
-      interval: 30s
+      test: ["CMD-SHELL", "pg_isready -U ev_staging_user -d ev_booking_staging_db && psql -U ev_staging_user -d ev_booking_staging_db -c 'SELECT 1;'"]
+      interval: 15s
       timeout: 10s
-      retries: 10
-      start_period: 60s  # Add this - crucial for Spring Boot
+      retries: 8
+      start_period: 90s  # Add this - crucial for Spring Boot
 
   redis:
     image: redis:7-alpine
@@ -58,10 +58,8 @@ services:
     ports:
       - "8081:8080"
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      - postgres
+      - redis
     networks:
       - ev-booking-staging-network
     restart: unless-stopped
