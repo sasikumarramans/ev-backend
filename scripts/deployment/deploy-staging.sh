@@ -30,7 +30,26 @@ echo -e "${YELLOW}Starting staging services...${NC}"
 docker compose -f docker-compose.staging.yml up -d
 
 echo -e "${YELLOW}Waiting for services to be ready...${NC}"
-sleep 30
+sleep 10
+
+echo -e "${YELLOW}Checking service status...${NC}"
+docker compose -f docker-compose.staging.yml ps
+
+echo -e "${YELLOW}Checking PostgreSQL logs...${NC}"
+docker compose -f docker-compose.staging.yml logs postgres
+
+echo -e "${YELLOW}Checking Redis logs...${NC}"
+docker compose -f docker-compose.staging.yml logs redis
+
+echo -e "${YELLOW}Testing network connectivity...${NC}"
+# Test if app container can resolve postgres
+docker compose -f docker-compose.staging.yml exec -T postgres pg_isready -U ev_staging_user -d ev_booking_staging_db || echo "PostgreSQL not ready"
+
+echo -e "${YELLOW}Waiting additional time for services...${NC}"
+sleep 20
+
+echo -e "${YELLOW}Testing network connectivity again...${NC}"
+docker compose -f docker-compose.staging.yml exec -T postgres pg_isready -U ev_staging_user -d ev_booking_staging_db || echo "PostgreSQL still not ready"
 
 # Health check
 echo -e "${YELLOW}Performing health checks...${NC}"
