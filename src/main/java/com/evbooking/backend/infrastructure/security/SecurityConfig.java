@@ -82,7 +82,7 @@ public class SecurityConfig {
         configuration.setAllowedHeaders(Arrays.asList(
             "Authorization", "Content-Type", "X-Requested-With",
             "Accept", "Origin", "Access-Control-Request-Method",
-            "Access-Control-Request-Headers", "X-Client-Token"
+            "Access-Control-Request-Headers"
         ));
 
         configuration.setExposedHeaders(Arrays.asList(
