@@ -35,7 +35,7 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .exceptionHandling(exception -> exception.authenticationEntryPoint(jwtAuthenticationEntryPoint))
             .authorizeHttpRequests(authz -> authz
-                // Public endpoints
+                // Public endpoints - these are relative to servlet context path
                 .requestMatchers("/auth/**").permitAll()
                 .requestMatchers("/public/**").permitAll()
 
@@ -48,6 +48,8 @@ public class SecurityConfig {
                 .requestMatchers("/swagger-ui/**").permitAll()
                 .requestMatchers("/swagger-ui.html").permitAll()
                 .requestMatchers("/v3/api-docs/**").permitAll()
+                .requestMatchers("/swagger-resources/**").permitAll()
+                .requestMatchers("/webjars/**").permitAll()
 
                 // Admin endpoints
                 .requestMatchers("/admin/**").hasRole("ADMIN")
