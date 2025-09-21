@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -26,8 +27,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenService jwtTokenService;
 
-    // Static client token for initial API access - using Bearer token format
-    private static final String STATIC_CLIENT_TOKEN = "Bearer client_token_123456";
+    @Value("${app.security.client-token:Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9}")
+    private String clientToken;
 
     public JwtAuthenticationFilter(JwtTokenService jwtTokenService) {
         this.jwtTokenService = jwtTokenService;
@@ -103,8 +104,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private boolean validateClientToken(HttpServletRequest request) {
         String authHeader = request.getHeader("Authorization");
 
-        // For now, use static token. In production, this could be more sophisticated
-        if (STATIC_CLIENT_TOKEN.equals(authHeader)) {
+        // Check against configured client token from environment
+        if (clientToken.equals(authHeader)) {
             return true;
         }
 

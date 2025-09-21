@@ -76,3 +76,5 @@ app:
     stripe:
       public-key: ${STRIPE_PUBLIC_KEY:}
       secret-key: ${STRIPE_SECRET_KEY:}
+  security:
+    client-token: ${CLIENT_TOKEN:Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9}
